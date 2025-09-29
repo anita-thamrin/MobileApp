@@ -198,7 +198,7 @@ Concerned Citizen
             {authorities.map((authority) => (
               <Chip
                 key={authority.id}
-                selected={selectedAuthorities.find(a => a.id === authority.id)}
+                selected={!!selectedAuthorities.find(a => a.id === authority.id)}
                 onPress={() => toggleAuthority(authority)}
                 style={styles.chip}
                 mode="outlined"

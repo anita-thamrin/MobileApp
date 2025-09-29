@@ -226,7 +226,7 @@ export default function AuthoritiesScreen() {
               {categories.map((cat) => (
                 <Chip
                   key={cat}
-                  selected={category === cat}
+                  selected={Boolean(category === cat)}
                   onPress={() => setCategory(cat)}
                   style={styles.categoryChip}
                   mode="outlined"
