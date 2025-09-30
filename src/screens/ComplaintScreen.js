@@ -1,245 +1,251 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert, Image } from 'react-native';
-import { 
-  TextInput, 
-  Button, 
-  Card, 
-  Title, 
-  Chip, 
-  Text,
-  Paragraph 
-} from 'react-native-paper';
-import * as MailComposer from 'expo-mail-composer';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, StyleSheet, ScrollView, Image, Alert } from 'react-native';
+import { TextInput, Button, Card, Title, Chip, Text } from 'react-native-paper';
+import * as Location from 'expo-location';
+import { useComplaints } from '../context/ComplaintsContext';
+
+const CATEGORIES = [
+  'Infrastructure', 'Environment', 'Public Safety', 'Transport', 
+  'Health', 'Education', 'Utilities', 'Other'
+];
 
 export default function ComplaintScreen({ route, navigation }) {
-  const [complaint, setComplaint] = useState('');
-  const [subject, setSubject] = useState('');
+  const { photoUri, location: passedLocation } = route.params || {};
+  const { addComplaint } = useComplaints();
+  
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
+  const [location, setLocation] = useState(passedLocation || null);
+  const [address, setAddress] = useState('');
   const [selectedAuthorities, setSelectedAuthorities] = useState([]);
-  const [authorities, setAuthorities] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isMailAvailable, setIsMailAvailable] = useState(false);
-
-  const { photoUri, location } = route.params || {};
 
   useEffect(() => {
-    loadAuthorities();
-    checkMailAvailability();
+    // If location was passed from camera, get the address
+    if (passedLocation && passedLocation.latitude && passedLocation.longitude) {
+      getAddressFromCoords(passedLocation.latitude, passedLocation.longitude);
+    } else {
+      // Otherwise try to get current location
+      getCurrentLocation();
+    }
   }, []);
 
-  const checkMailAvailability = async () => {
-    const available = await MailComposer.isAvailableAsync();
-    setIsMailAvailable(available);
-  };
-
-  const loadAuthorities = async () => {
+  const getCurrentLocation = async () => {
     try {
-      const storedAuthorities = await AsyncStorage.getItem('authorities');
-      if (storedAuthorities) {
-        setAuthorities(JSON.parse(storedAuthorities));
-      } else {
-        const defaultAuthorities = [
-          { id: '1', name: 'City Council', email: 'council@city.gov', category: 'Municipal' },
-          { id: '2', name: 'Police Department', email: 'reports@police.gov', category: 'Safety' },
-          { id: '3', name: 'Public Works', email: 'works@city.gov', category: 'Infrastructure' },
-          { id: '4', name: 'Environmental Agency', email: 'env@epa.gov', category: 'Environment' },
-        ];
-        setAuthorities(defaultAuthorities);
-        await AsyncStorage.setItem('authorities', JSON.stringify(defaultAuthorities));
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        timeout: 5000,
+      });
+      
+      if (loc && loc.coords) {
+        const locationData = {
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        };
+        setLocation(locationData);
+        getAddressFromCoords(locationData.latitude, locationData.longitude);
       }
     } catch (error) {
-      console.error('Error loading authorities:', error);
+      console.log('Error getting location:', error);
     }
   };
 
-  const toggleAuthority = (authority) => {
-    setSelectedAuthorities(prev => {
-      const isSelected = prev.find(a => a.id === authority.id);
-      if (isSelected) {
-        return prev.filter(a => a.id !== authority.id);
-      } else {
-        return [...prev, authority];
+  const getAddressFromCoords = async (latitude, longitude) => {
+    try {
+      const addresses = await Location.reverseGeocodeAsync({
+        latitude,
+        longitude,
+      });
+      
+      if (addresses && addresses.length > 0) {
+        const addr = addresses[0];
+        const formattedAddress = [
+          addr.street,
+          addr.city,
+          addr.region,
+          addr.postalCode,
+          addr.country
+        ].filter(Boolean).join(', ');
+        setAddress(formattedAddress);
       }
-    });
+    } catch (error) {
+      console.log('Error getting address:', error);
+    }
   };
 
-  const formatLocationText = () => {
-    if (!location) return 'Location not available';
-    
-    const { coords, address } = location;
-    let locationText = `Coordinates: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
-    
-    if (address) {
-      locationText += `\nAddress: ${address.street || ''} ${address.city || ''} ${address.region || ''} ${address.postalCode || ''}`;
-    }
-    
-    return locationText;
-  };
-
-  const submitComplaint = async () => {
-    if (!complaint.trim()) {
-      Alert.alert('Error', 'Please enter a complaint description');
+  const handleSubmit = () => {
+    if (!title.trim()) {
+      Alert.alert('Error', 'Please enter a title');
       return;
     }
-
-    if (!subject.trim()) {
-      Alert.alert('Error', 'Please enter a subject');
+    if (!description.trim()) {
+      Alert.alert('Error', 'Please enter a description');
       return;
     }
-
-    if (selectedAuthorities.length === 0) {
-      Alert.alert('Error', 'Please select at least one authority');
-      return;
-    }
-
-    if (!isMailAvailable) {
-      Alert.alert('Error', 'Mail app is not available on this device');
+    if (!category) {
+      Alert.alert('Error', 'Please select a category');
       return;
     }
 
     setLoading(true);
-
-    try {
-      const recipients = selectedAuthorities.map(auth => auth.email);
-      const locationText = formatLocationText();
-      
-      const body = `
-Dear Authority,
-
-${complaint}
-
-Location Information:
-${locationText}
-
-Submitted via Complain King App
-Date: ${new Date().toLocaleString()}
-
-Best regards,
-Concerned Citizen
-      `;
-
-      const mailOptions = {
-        recipients: recipients,
-        subject: subject,
-        body: body,
-        attachments: photoUri ? [photoUri] : [],
-      };
-
-      const result = await MailComposer.composeAsync(mailOptions);
-      
-      if (result.status === 'sent') {
-        Alert.alert('Success', 'Complaint sent successfully!', [
-          { text: 'OK', onPress: () => navigation.navigate('Home') },
-        ]);
-      } else {
-        Alert.alert('Info', 'Complaint composition cancelled');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to send complaint: ' + error.message);
-    } finally {
+    
+    // Create the complaint data
+    const complaintData = {
+      title: title.trim(),
+      description: description.trim(),
+      category,
+      photoUri,
+      location,
+      address,
+      authorities: selectedAuthorities,
+    };
+    
+    // Save the complaint
+    addComplaint(complaintData);
+    
+    // Simulate submission delay
+    setTimeout(() => {
       setLoading(false);
-    }
+      Alert.alert(
+        'Success',
+        'Your complaint has been submitted successfully!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              navigation.navigate('MainTabs', { screen: 'Home' });
+            },
+          },
+        ]
+      );
+    }, 1000);
   };
+
+  const toggleAuthority = (authority) => {
+    setSelectedAuthorities(prev => {
+      const exists = prev.find(a => a.id === authority.id);
+      if (exists) {
+        return prev.filter(a => a.id !== authority.id);
+      }
+      return [...prev, authority];
+    });
+  };
+
+  // Mock authorities - replace with actual data
+  const authorities = [
+    { id: 1, name: 'City Council', email: 'council@city.gov' },
+    { id: 2, name: 'Public Works', email: 'works@city.gov' },
+    { id: 3, name: 'Health Department', email: 'health@city.gov' },
+  ];
 
   return (
     <ScrollView style={styles.container}>
+      {photoUri && (
+        <Card style={styles.card}>
+          <Card.Content>
+            <Image source={{ uri: photoUri }} style={styles.image} />
+          </Card.Content>
+        </Card>
+      )}
+
       <Card style={styles.card}>
         <Card.Content>
           <Title>Complaint Details</Title>
           
           <TextInput
-            label="Subject"
-            value={subject}
-            onChangeText={setSubject}
+            label="Title"
+            value={title}
+            onChangeText={setTitle}
             mode="outlined"
             style={styles.input}
-            placeholder="Brief description of the issue"
+            placeholder="e.g., Pothole on Main Street"
           />
 
           <TextInput
-            label="Detailed Complaint"
-            value={complaint}
-            onChangeText={setComplaint}
+            label="Description"
+            value={description}
+            onChangeText={setDescription}
             mode="outlined"
             multiline
-            numberOfLines={6}
+            numberOfLines={4}
             style={styles.input}
             placeholder="Describe the issue in detail..."
           />
+
+          <Text style={styles.sectionTitle}>Category</Text>
+          <View style={styles.chipContainer}>
+            {CATEGORIES.map((cat) => (
+              <Chip
+                key={cat}
+                selected={category === cat}
+                onPress={() => setCategory(cat)}
+                style={styles.chip}
+              >
+                {cat}
+              </Chip>
+            ))}
+          </View>
         </Card.Content>
       </Card>
 
-      {photoUri && (
-        <Card style={styles.card}>
-          <Card.Content>
-            <Title>Photo Evidence</Title>
-            <Image source={{ uri: photoUri }} style={styles.photo} />
-          </Card.Content>
-        </Card>
-      )}
-
-      {location && (
-        <Card style={styles.card}>
-          <Card.Content>
-            <Title>Location Information</Title>
-            <Text style={styles.locationText}>{formatLocationText()}</Text>
-          </Card.Content>
-        </Card>
-      )}
+      <Card style={styles.card}>
+        <Card.Content>
+          <Title>Location</Title>
+          {location && location.latitude && location.longitude ? (
+            <>
+              <Text style={styles.locationText}>
+                📍 Lat: {location.latitude.toFixed(6)}, Lng: {location.longitude.toFixed(6)}
+              </Text>
+              {address ? (
+                <Text style={styles.addressText}>{address}</Text>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.locationText}>📍 Location not available</Text>
+          )}
+          <Button
+            mode="text"
+            onPress={getCurrentLocation}
+            style={styles.refreshButton}
+          >
+            Refresh Location
+          </Button>
+        </Card.Content>
+      </Card>
 
       <Card style={styles.card}>
         <Card.Content>
-          <Title>Select Recipients</Title>
-          <Paragraph style={styles.subtitle}>
-            Choose which authorities should receive this complaint:
-          </Paragraph>
-          
-          <View style={styles.authoritiesContainer}>
+          <Title>Select Authorities</Title>
+          <View style={styles.chipContainer}>
             {authorities.map((authority) => (
               <Chip
                 key={authority.id}
                 selected={!!selectedAuthorities.find(a => a.id === authority.id)}
                 onPress={() => toggleAuthority(authority)}
                 style={styles.chip}
-                mode="outlined"
               >
-                {authority.name} ({authority.category})
+                {authority.name}
               </Chip>
             ))}
           </View>
-
-          {selectedAuthorities.length > 0 && (
-            <View style={styles.selectedContainer}>
-              <Text style={styles.selectedTitle}>Selected Recipients:</Text>
-              {selectedAuthorities.map((auth) => (
-                <Text key={auth.id} style={styles.selectedEmail}>
-                  • {auth.name}: {auth.email}
-                </Text>
-              ))}
-            </View>
-          )}
         </Card.Content>
       </Card>
 
       <View style={styles.buttonContainer}>
         <Button
           mode="contained"
-          onPress={submitComplaint}
-          style={styles.submitButton}
+          onPress={handleSubmit}
           loading={loading}
-          disabled={loading || !isMailAvailable}
-          icon="send"
+          disabled={loading}
+          style={styles.submitButton}
         >
-          {loading ? 'Sending...' : 'Submit Complaint'}
-        </Button>
-
-        <Button
-          mode="outlined"
-          onPress={() => navigation.navigate('Authorities')}
-          style={styles.manageButton}
-          icon="account-group"
-        >
-          Manage Authorities
+          Submit Complaint
         </Button>
       </View>
     </ScrollView>
@@ -255,55 +261,46 @@ const styles = StyleSheet.create({
     margin: 16,
     marginBottom: 8,
   },
-  input: {
-    marginVertical: 8,
-  },
-  photo: {
+  image: {
     width: '100%',
     height: 200,
     borderRadius: 8,
+  },
+  input: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
     marginTop: 8,
+    marginBottom: 8,
   },
-  locationText: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
-    fontFamily: 'monospace',
-  },
-  subtitle: {
-    marginVertical: 8,
-    color: '#666',
-  },
-  authoritiesContainer: {
+  chipContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginTop: 8,
   },
   chip: {
-    margin: 4,
-  },
-  selectedContainer: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: '#e8f5e8',
-    borderRadius: 8,
-  },
-  selectedTitle: {
-    fontWeight: 'bold',
+    marginRight: 8,
     marginBottom: 8,
   },
-  selectedEmail: {
+  locationText: {
     fontSize: 14,
+    marginTop: 8,
+  },
+  addressText: {
+    fontSize: 12,
     color: '#666',
-    marginVertical: 2,
+    marginTop: 4,
+  },
+  refreshButton: {
+    marginTop: 8,
   },
   buttonContainer: {
-    padding: 16,
+    margin: 16,
+    marginTop: 8,
   },
   submitButton: {
-    marginVertical: 8,
-  },
-  manageButton: {
-    marginVertical: 8,
+    paddingVertical: 6,
   },
 });

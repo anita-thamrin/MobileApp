@@ -1,142 +1,156 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Alert, Text } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, StyleSheet, Alert, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Button, IconButton, Text, ActivityIndicator } from 'react-native-paper';
 import * as Location from 'expo-location';
-import { Button, ActivityIndicator } from 'react-native-paper';
 
 export default function CameraScreen({ navigation }) {
-  const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState('back');
-  const [location, setLocation] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [locationPermission, requestLocationPermission] = Location.useForegroundPermissions();
+  const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = useRef(null);
 
-  useEffect(() => {
-    getCurrentLocation();
-  }, []);
-
-  const getCurrentLocation = async () => {
-    try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission denied', 'Permission to access location was denied');
-        return;
-      }
-
-      let currentLocation = await Location.getCurrentPositionAsync({});
-      setLocation(currentLocation);
-      
-      let address = await Location.reverseGeocodeAsync({
-        latitude: currentLocation.coords.latitude,
-        longitude: currentLocation.coords.longitude,
-      });
-      
-      if (address.length > 0) {
-        setLocation({
-          ...currentLocation,
-          address: address[0],
-        });
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to get location');
-    }
-  };
-
-  const takePicture = async () => {
-    if (cameraRef.current) {
-      setLoading(true);
-      try {
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.8,
-          base64: false,
-        });
-        
-        navigation.navigate('Complaint', {
-          photoUri: photo.uri,
-          location: location,
-        });
-      } catch (error) {
-        Alert.alert('Error', 'Failed to take picture');
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  const flipCamera = () => {
-    setFacing(current => (current === 'back' ? 'front' : 'back'));
-  };
-
+  // Loading state
   if (!permission) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" />
-        <Text>Requesting camera permission...</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6200ee" />
+        <Text style={styles.loadingText}>Loading camera...</Text>
       </View>
     );
   }
 
+  // Permission not granted
   if (!permission.granted) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.permissionText}>We need camera permission to take photos</Text>
-        <Button mode="contained" onPress={requestPermission}>
-          Grant Permission
+      <View style={styles.permissionContainer}>
+        <Text style={styles.permissionText}>📷</Text>
+        <Text style={styles.permissionTitle}>Camera Access Required</Text>
+        <Text style={styles.permissionDescription}>
+          We need your permission to access the camera to take photos of issues you want to report.
+        </Text>
+        <Button 
+          mode="contained" 
+          onPress={requestPermission} 
+          style={styles.permissionButton}
+          icon="camera"
+        >
+          Grant Camera Permission
+        </Button>
+        <Button 
+          mode="text" 
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          Go Back
         </Button>
       </View>
     );
   }
 
+  const toggleCameraFacing = () => {
+    setFacing(current => (current === 'back' ? 'front' : 'back'));
+  };
+
+  const takePicture = async () => {
+    if (cameraRef.current && !isCapturing) {
+      setIsCapturing(true);
+      try {
+        // Take the photo first
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.8,
+        });
+
+        // Get location (optional - app works even if this fails)
+        let location = null;
+        try {
+          // Request location permission if not granted
+          let currentLocationPermission = locationPermission;
+          if (!currentLocationPermission?.granted) {
+            const result = await requestLocationPermission();
+            currentLocationPermission = result;
+          }
+
+          if (currentLocationPermission?.granted) {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+              timeout: 5000,
+            });
+            if (loc && loc.coords) {
+              location = {
+                latitude: loc.coords.latitude,
+                longitude: loc.coords.longitude,
+              };
+            }
+          }
+        } catch (error) {
+          console.log('Location not available:', error);
+          // Continue without location - it's optional
+        }
+
+        // Navigate to complaint screen with photo and location (or null)
+        navigation.navigate('Complaint', {
+          photoUri: photo.uri,
+          location: location,
+        });
+      } catch (error) {
+        console.error('Error taking picture:', error);
+        Alert.alert('Error', 'Failed to take picture. Please try again.');
+      } finally {
+        setIsCapturing(false);
+      }
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
-        <View style={styles.overlay}>
-          <View style={styles.topBar}>
-            {location && (
-              <View style={styles.locationInfo}>
-                <Text style={styles.locationText}>
-                  📍 Location detected
-                </Text>
-                {location.address && (
-                  <Text style={styles.addressText}>
-                    {location.address.street}, {location.address.city}
-                  </Text>
-                )}
-              </View>
-            )}
-          </View>
+      <CameraView
+        style={styles.camera}
+        facing={facing}
+        ref={cameraRef}
+      />
+      
+      {/* Overlay UI with absolute positioning - NOT inside CameraView */}
+      <View style={styles.overlayContainer}>
+        {/* Top Bar */}
+        <View style={styles.topBar}>
+          <IconButton
+            icon="close"
+            iconColor="white"
+            size={30}
+            onPress={() => navigation.goBack()}
+            style={styles.closeButton}
+          />
+          <Text style={styles.instructionText}>Position the issue in frame</Text>
+        </View>
 
-          <View style={styles.bottomBar}>
-            <Button
-              mode="contained"
-              onPress={flipCamera}
-              style={styles.flipButton}
-              icon="camera-flip"
-            >
-              Flip
-            </Button>
-
-            <Button
-              mode="contained"
+        {/* Bottom Controls */}
+        <View style={styles.bottomBar}>
+          <IconButton
+            icon="camera-flip"
+            iconColor="white"
+            size={30}
+            onPress={toggleCameraFacing}
+            style={styles.controlButton}
+            disabled={isCapturing}
+          />
+          
+          {isCapturing ? (
+            <ActivityIndicator size={70} color="white" />
+          ) : (
+            <IconButton
+              icon="camera"
+              iconColor="white"
+              size={70}
               onPress={takePicture}
               style={styles.captureButton}
-              disabled={loading}
-              icon="camera"
-              loading={loading}
-            >
-              {loading ? 'Taking...' : 'Capture'}
-            </Button>
-
-            <Button
-              mode="outlined"
-              onPress={() => navigation.goBack()}
-              style={styles.cancelButton}
-            >
-              Cancel
-            </Button>
-          </View>
+            />
+          )}
+          
+          <View style={styles.controlButton} />
         </View>
-      </CameraView>
+      </View>
     </View>
   );
 }
@@ -144,57 +158,89 @@ export default function CameraScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000',
+  },
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f5f5f5',
+  },
+  permissionText: {
+    fontSize: 60,
+    marginBottom: 20,
+  },
+  permissionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  permissionDescription: {
+    textAlign: 'center',
+    marginBottom: 24,
+    fontSize: 16,
+    color: '#666',
+    lineHeight: 24,
+  },
+  permissionButton: {
+    marginTop: 10,
+    paddingHorizontal: 20,
+  },
+  backButton: {
+    marginTop: 12,
   },
   camera: {
     flex: 1,
-    width: '100%',
   },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
+  overlayContainer: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
   },
   topBar: {
-    padding: 20,
-    paddingTop: 40,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
-  locationInfo: {
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 10,
-    borderRadius: 8,
+  closeButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
-  locationText: {
+  instructionText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: 'bold',
-  },
-  addressText: {
-    color: 'white',
-    fontSize: 14,
-    marginTop: 4,
+    fontWeight: '500',
+    marginRight: 16,
   },
   bottomBar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    padding: 20,
-    paddingBottom: 40,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  controlButton: {
+    width: 60,
   },
   captureButton: {
-    flex: 1,
-    marginHorizontal: 10,
-  },
-  flipButton: {
-    marginRight: 10,
-  },
-  cancelButton: {
-    marginLeft: 10,
-  },
-  permissionText: {
-    textAlign: 'center',
-    marginBottom: 20,
-    fontSize: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 4,
+    borderColor: 'white',
   },
 });

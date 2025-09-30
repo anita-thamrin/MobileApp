@@ -1,8 +1,29 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Button, Card, Title, Paragraph, FAB } from 'react-native-paper';
+import { Button, Card, Title, Paragraph, Chip, Text } from 'react-native-paper';
+import { useComplaints } from '../context/ComplaintsContext';
 
 export default function HomeScreen({ navigation }) {
+  const { complaints } = useComplaints();
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Pending': return '#FF9800';
+      case 'In Progress': return '#2196F3';
+      case 'Resolved': return '#4CAF50';
+      default: return '#757575';
+    }
+  };
+
+  const formatDate = (isoString) => {
+    const date = new Date(isoString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -21,7 +42,10 @@ export default function HomeScreen({ navigation }) {
             <View style={styles.buttonContainer}>
               <Button
                 mode="contained"
-                onPress={() => navigation.navigate('Camera')}
+                onPress={() => {
+                  // Navigate to the Report tab (CameraScreen)
+                  navigation.navigate('Report');
+                }}
                 style={styles.button}
                 icon="camera"
               >
@@ -52,17 +76,45 @@ export default function HomeScreen({ navigation }) {
         <Card style={styles.card}>
           <Card.Content>
             <Title>Recent Complaints</Title>
-            <Paragraph>No complaints submitted yet.</Paragraph>
+            {complaints.length === 0 ? (
+              <Paragraph>No complaints submitted yet.</Paragraph>
+            ) : (
+              complaints.slice(0, 3).map((complaint) => (
+                <Card key={complaint.id} style={styles.complaintCard}>
+                  <Card.Content>
+                    <View style={styles.complaintHeader}>
+                      <Text style={styles.complaintTitle}>{complaint.title}</Text>
+                      <Chip 
+                        mode="flat" 
+                        style={[styles.statusChip, { backgroundColor: getStatusColor(complaint.status) }]}
+                        textStyle={styles.statusText}
+                      >
+                        {complaint.status}
+                      </Chip>
+                    </View>
+                    <Text style={styles.complaintCategory}>{complaint.category}</Text>
+                    <Text style={styles.complaintDate}>{formatDate(complaint.createdAt)}</Text>
+                    {complaint.description && (
+                      <Paragraph numberOfLines={2} style={styles.complaintDescription}>
+                        {complaint.description}
+                      </Paragraph>
+                    )}
+                  </Card.Content>
+                </Card>
+              ))
+            )}
+            {complaints.length > 3 && (
+              <Button 
+                mode="text" 
+                onPress={() => {}}
+                style={styles.viewAllButton}
+              >
+                View All Complaints ({complaints.length})
+              </Button>
+            )}
           </Card.Content>
         </Card>
       </ScrollView>
-
-      <FAB
-        style={styles.fab}
-        icon="plus"
-        onPress={() => navigation.navigate('Camera')}
-        label="Quick Report"
-      />
     </View>
   );
 }
@@ -85,10 +137,48 @@ const styles = StyleSheet.create({
   button: {
     marginVertical: 8,
   },
-  fab: {
-    position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 0,
+  complaintCard: {
+    marginTop: 12,
+    backgroundColor: '#fff',
+    elevation: 1,
+  },
+  complaintHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  complaintTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    flex: 1,
+    marginRight: 8,
+  },
+  complaintCategory: {
+    fontSize: 12,
+    color: '#6200ee',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  complaintDate: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 8,
+  },
+  complaintDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  statusChip: {
+    height: 24,
+  },
+  statusText: {
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  viewAllButton: {
+    marginTop: 8,
   },
 });
