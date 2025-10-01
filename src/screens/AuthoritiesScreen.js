@@ -1,29 +1,36 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { 
-  Card, 
-  Title, 
-  Button, 
-  TextInput, 
-  List, 
-  IconButton, 
-  Dialog, 
-  Portal, 
-  Text,
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useEffect, useState } from "react";
+import { Alert, ScrollView, StyleSheet, View } from "react-native";
+import {
+  Button,
+  Card,
   Chip,
+  Dialog,
   FAB,
-} from 'react-native-paper';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+  IconButton,
+  List,
+  Portal,
+  Text,
+  TextInput,
+  Title,
+} from "react-native-paper";
 
 export default function AuthoritiesScreen() {
   const [authorities, setAuthorities] = useState([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingAuthority, setEditingAuthority] = useState(null);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [category, setCategory] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [category, setCategory] = useState("");
 
-  const categories = ['Municipal', 'Safety', 'Infrastructure', 'Environment', 'Health', 'Transportation'];
+  const categories = [
+    "Municipal",
+    "Safety",
+    "Infrastructure",
+    "Environment",
+    "Health",
+    "Transportation",
+  ];
 
   useEffect(() => {
     loadAuthorities();
@@ -31,22 +38,25 @@ export default function AuthoritiesScreen() {
 
   const loadAuthorities = async () => {
     try {
-      const storedAuthorities = await AsyncStorage.getItem('authorities');
+      const storedAuthorities = await AsyncStorage.getItem("authorities");
       if (storedAuthorities) {
         setAuthorities(JSON.parse(storedAuthorities));
       }
     } catch (error) {
-      console.error('Error loading authorities:', error);
+      console.error("Error loading authorities:", error);
     }
   };
 
   const saveAuthorities = async (updatedAuthorities) => {
     try {
-      await AsyncStorage.setItem('authorities', JSON.stringify(updatedAuthorities));
+      await AsyncStorage.setItem(
+        "authorities",
+        JSON.stringify(updatedAuthorities)
+      );
       setAuthorities(updatedAuthorities);
     } catch (error) {
-      console.error('Error saving authorities:', error);
-      Alert.alert('Error', 'Failed to save authorities');
+      console.error("Error saving authorities:", error);
+      Alert.alert("Error", "Failed to save authorities");
     }
   };
 
@@ -57,12 +67,12 @@ export default function AuthoritiesScreen() {
 
   const handleAddAuthority = () => {
     if (!name.trim() || !email.trim() || !category.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
     if (!validateEmail(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      Alert.alert("Error", "Please enter a valid email address");
       return;
     }
 
@@ -81,18 +91,23 @@ export default function AuthoritiesScreen() {
 
   const handleEditAuthority = () => {
     if (!name.trim() || !email.trim() || !category.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
     if (!validateEmail(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      Alert.alert("Error", "Please enter a valid email address");
       return;
     }
 
-    const updatedAuthorities = authorities.map(auth => 
-      auth.id === editingAuthority.id 
-        ? { ...auth, name: name.trim(), email: email.trim().toLowerCase(), category }
+    const updatedAuthorities = authorities.map((auth) =>
+      auth.id === editingAuthority.id
+        ? {
+            ...auth,
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            category,
+          }
         : auth
     );
 
@@ -103,15 +118,17 @@ export default function AuthoritiesScreen() {
 
   const handleDeleteAuthority = (authority) => {
     Alert.alert(
-      'Delete Authority',
+      "Delete Authority",
       `Are you sure you want to delete ${authority.name}?`,
       [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
           onPress: () => {
-            const updatedAuthorities = authorities.filter(auth => auth.id !== authority.id);
+            const updatedAuthorities = authorities.filter(
+              (auth) => auth.id !== authority.id
+            );
             saveAuthorities(updatedAuthorities);
           },
         },
@@ -120,9 +137,9 @@ export default function AuthoritiesScreen() {
   };
 
   const resetForm = () => {
-    setName('');
-    setEmail('');
-    setCategory('');
+    setName("");
+    setEmail("");
+    setCategory("");
   };
 
   const openEditDialog = (authority) => {
@@ -154,7 +171,8 @@ export default function AuthoritiesScreen() {
           <Card style={styles.card}>
             <Card.Content>
               <Text style={styles.emptyText}>
-                No authorities added yet. Tap the + button to add your first authority.
+                No authorities added yet. Tap the + button to add your first
+                authority.
               </Text>
             </Card.Content>
           </Card>
@@ -196,9 +214,12 @@ export default function AuthoritiesScreen() {
       />
 
       <Portal>
-        <Dialog visible={showAddDialog || editingAuthority !== null} onDismiss={closeDialogs}>
+        <Dialog
+          visible={showAddDialog || editingAuthority !== null}
+          onDismiss={closeDialogs}
+        >
           <Dialog.Title>
-            {editingAuthority ? 'Edit Authority' : 'Add New Authority'}
+            {editingAuthority ? "Edit Authority" : "Add New Authority"}
           </Dialog.Title>
           <Dialog.Content>
             <TextInput
@@ -209,14 +230,14 @@ export default function AuthoritiesScreen() {
               style={styles.dialogInput}
               placeholder="e.g., City Council"
             />
-            
+
             <TextInput
               label="Email Address"
               value={email}
               onChangeText={setEmail}
               mode="outlined"
               style={styles.dialogInput}
-              placeholder="e.g., council@city.gov"
+              placeholder="sinchecm@gmail.com"
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -238,11 +259,13 @@ export default function AuthoritiesScreen() {
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={closeDialogs}>Cancel</Button>
-            <Button 
-              onPress={editingAuthority ? handleEditAuthority : handleAddAuthority}
+            <Button
+              onPress={
+                editingAuthority ? handleEditAuthority : handleAddAuthority
+              }
               mode="contained"
             >
-              {editingAuthority ? 'Update' : 'Add'}
+              {editingAuthority ? "Update" : "Add"}
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -254,7 +277,7 @@ export default function AuthoritiesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#f5f5f5",
   },
   scrollView: {
     flex: 1,
@@ -264,23 +287,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   subtitle: {
-    color: '#666',
+    color: "#666",
     marginTop: 8,
   },
   emptyText: {
-    textAlign: 'center',
-    color: '#666',
-    fontStyle: 'italic',
+    textAlign: "center",
+    color: "#666",
+    fontStyle: "italic",
     marginVertical: 20,
   },
   actionButtons: {
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   chipContainer: {
     paddingTop: 0,
   },
   fab: {
-    position: 'absolute',
+    position: "absolute",
     margin: 16,
     right: 0,
     bottom: 0,
@@ -292,11 +315,11 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 8,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   categoryContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   categoryChip: {
     margin: 4,

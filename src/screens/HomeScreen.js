@@ -1,26 +1,30 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { Button, Card, Title, Paragraph, Chip, Text } from 'react-native-paper';
-import { useComplaints } from '../context/ComplaintsContext';
+import React from "react";
+import { View, StyleSheet, ScrollView } from "react-native";
+import { Button, Card, Title, Paragraph, Chip, Text } from "react-native-paper";
+import { useComplaints } from "../context/ComplaintsContext";
 
 export default function HomeScreen({ navigation }) {
   const { complaints } = useComplaints();
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Pending': return '#FF9800';
-      case 'In Progress': return '#2196F3';
-      case 'Resolved': return '#4CAF50';
-      default: return '#757575';
+      case "Pending":
+        return "#F57C88";
+      case "In Progress":
+        return "#197602";
+      case "Resolved":
+        return "#388E3C";
+      default:
+        return "#666";
     }
   };
 
   const formatDate = (isoString) => {
     const date = new Date(isoString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
   };
 
@@ -31,7 +35,8 @@ export default function HomeScreen({ navigation }) {
           <Card.Content>
             <Title>Welcome to Complain King</Title>
             <Paragraph>
-              Report issues to authorities quickly and efficiently with photo evidence and location data.
+              Report issues to authorities quickly and efficiently with photo
+              evidence and location data.
             </Paragraph>
           </Card.Content>
         </Card>
@@ -44,26 +49,26 @@ export default function HomeScreen({ navigation }) {
                 mode="contained"
                 onPress={() => {
                   // Navigate to the Report tab (CameraScreen)
-                  navigation.navigate('Report');
+                  navigation.navigate("Report");
                 }}
                 style={styles.button}
                 icon="camera"
               >
                 Take Photo & Report
               </Button>
-              
+
               <Button
                 mode="outlined"
-                onPress={() => navigation.navigate('Complaint')}
+                onPress={() => navigation.navigate("Complaint")}
                 style={styles.button}
                 icon="file-document-edit"
               >
                 Write Complaint
               </Button>
-              
+
               <Button
                 mode="outlined"
-                onPress={() => navigation.navigate('Authorities')}
+                onPress={() => navigation.navigate("Authorities")}
                 style={styles.button}
                 icon="account-group"
               >
@@ -83,19 +88,31 @@ export default function HomeScreen({ navigation }) {
                 <Card key={complaint.id} style={styles.complaintCard}>
                   <Card.Content>
                     <View style={styles.complaintHeader}>
-                      <Text style={styles.complaintTitle}>{complaint.title}</Text>
-                      <Chip 
-                        mode="flat" 
-                        style={[styles.statusChip, { backgroundColor: getStatusColor(complaint.status) }]}
+                      <Text style={styles.complaintTitle}>
+                        {complaint.title}
+                      </Text>
+                      <Chip
+                        mode="flat"
+                        style={[
+                          styles.statusChip,
+                          { backgroundColor: getStatusColor(complaint.status) },
+                        ]}
                         textStyle={styles.statusText}
                       >
                         {complaint.status}
                       </Chip>
                     </View>
-                    <Text style={styles.complaintCategory}>{complaint.category}</Text>
-                    <Text style={styles.complaintDate}>{formatDate(complaint.createdAt)}</Text>
+                    <Text style={styles.complaintCategory}>
+                      {complaint.category}
+                    </Text>
+                    <Text style={styles.complaintDate}>
+                      {formatDate(complaint.createdAt)}
+                    </Text>
                     {complaint.description && (
-                      <Paragraph numberOfLines={2} style={styles.complaintDescription}>
+                      <Paragraph
+                        numberOfLines={2}
+                        style={styles.complaintDescription}
+                      >
                         {complaint.description}
                       </Paragraph>
                     )}
@@ -104,8 +121,8 @@ export default function HomeScreen({ navigation }) {
               ))
             )}
             {complaints.length > 3 && (
-              <Button 
-                mode="text" 
+              <Button
+                mode="text"
                 onPress={() => {}}
                 style={styles.viewAllButton}
               >
@@ -122,7 +139,7 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#f5f5f5",
   },
   scrollView: {
     flex: 1,
@@ -139,44 +156,46 @@ const styles = StyleSheet.create({
   },
   complaintCard: {
     marginTop: 12,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     elevation: 1,
   },
   complaintHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 4,
   },
   complaintTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     flex: 1,
     marginRight: 8,
   },
   complaintCategory: {
     fontSize: 12,
-    color: '#6200ee',
-    fontWeight: '500',
+    color: "#6200ee",
+    fontWeight: "500",
     marginBottom: 2,
   },
   complaintDate: {
     fontSize: 12,
-    color: '#999',
+    color: "#999",
     marginBottom: 8,
   },
   complaintDescription: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginTop: 4,
   },
   statusChip: {
-    height: 24,
+    height: 36,
+    paddingHorizontal: 10,
   },
   statusText: {
-    fontSize: 11,
-    color: '#fff',
-    fontWeight: 'bold',
+    fontSize: 16,
+    color: "#fff",
+    fontWeight: "bold",
+    letterSpacing: 0.5,
   },
   viewAllButton: {
     marginTop: 8,

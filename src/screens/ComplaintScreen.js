@@ -1,49 +1,59 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Image, Alert } from 'react-native';
-import { TextInput, Button, Card, Title, Chip, Text } from 'react-native-paper';
-import * as Location from 'expo-location';
-import { useComplaints } from '../context/ComplaintsContext';
+import React, { useState, useEffect } from "react";
+import { View, StyleSheet, ScrollView, Image, Alert } from "react-native";
+import { TextInput, Button, Card, Title, Chip, Text } from "react-native-paper";
+import * as Location from "expo-location";
+import * as MailComposer from "expo-mail-composer";
+import { useComplaints } from "../context/ComplaintsContext";
 
 const CATEGORIES = [
-  'Infrastructure', 'Environment', 'Public Safety', 'Transport', 
-  'Health', 'Education', 'Utilities', 'Other'
+  "Infrastructure",
+  "Environment",
+  "Public Safety",
+  "Transport",
+  "Health",
+  "Education",
+  "Utilities",
+  "Other",
 ];
 
 export default function ComplaintScreen({ route, navigation }) {
   const { photoUri, location: passedLocation } = route.params || {};
   const { addComplaint } = useComplaints();
-  
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('');
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
   const [location, setLocation] = useState(passedLocation || null);
-  const [address, setAddress] = useState('');
+  const [address, setAddress] = useState("");
   const [selectedAuthorities, setSelectedAuthorities] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Mock authorities - replace with actual data from AsyncStorage or props
+  const AUTHORITIES = [
+    { id: "1", name: "City Council", email: "chechiatming@icloud.com" },
+    { id: "2", name: "Police Department", email: "chechiatming@icloud.com" },
+    { id: "3", name: "Public Works", email: "chechiatming@icloud.com" },
+    { id: "4", name: "Environmental Agency", email: "chechiatming@icloud.com" },
+  ];
+
   useEffect(() => {
-    // If location was passed from camera, get the address
-    if (passedLocation && passedLocation.latitude && passedLocation.longitude) {
-      getAddressFromCoords(passedLocation.latitude, passedLocation.longitude);
-    } else {
-      // Otherwise try to get current location
+    if (!location) {
       getCurrentLocation();
+    } else {
+      getAddressFromCoords(location.latitude, location.longitude);
     }
   }, []);
 
   const getCurrentLocation = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Location permission is required");
         return;
       }
 
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-        timeout: 5000,
-      });
-      
-      if (loc && loc.coords) {
+      let loc = await Location.getCurrentPositionAsync({});
+      if (loc) {
         const locationData = {
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
@@ -52,7 +62,7 @@ export default function ComplaintScreen({ route, navigation }) {
         getAddressFromCoords(locationData.latitude, locationData.longitude);
       }
     } catch (error) {
-      console.log('Error getting location:', error);
+      console.error("Error getting location:", error);
     }
   };
 
@@ -62,7 +72,7 @@ export default function ComplaintScreen({ route, navigation }) {
         latitude,
         longitude,
       });
-      
+
       if (addresses && addresses.length > 0) {
         const addr = addresses[0];
         const formattedAddress = [
@@ -70,32 +80,49 @@ export default function ComplaintScreen({ route, navigation }) {
           addr.city,
           addr.region,
           addr.postalCode,
-          addr.country
-        ].filter(Boolean).join(', ');
+          addr.country,
+        ]
+          .filter(Boolean)
+          .join(", ");
         setAddress(formattedAddress);
       }
     } catch (error) {
-      console.log('Error getting address:', error);
+      console.error("Error getting address:", error);
     }
   };
 
-  const handleSubmit = () => {
+  const toggleAuthority = (authority) => {
+    setSelectedAuthorities((prev) => {
+      const exists = prev.find((a) => a.id === authority.id);
+      if (exists) {
+        return prev.filter((a) => a.id !== authority.id);
+      }
+      return [...prev, authority];
+    });
+  };
+
+  const handleSubmit = async () => {
+    // Validation
     if (!title.trim()) {
-      Alert.alert('Error', 'Please enter a title');
+      Alert.alert("Error", "Please enter a title");
       return;
     }
     if (!description.trim()) {
-      Alert.alert('Error', 'Please enter a description');
+      Alert.alert("Error", "Please enter a description");
       return;
     }
     if (!category) {
-      Alert.alert('Error', 'Please select a category');
+      Alert.alert("Error", "Please select a category");
+      return;
+    }
+    if (selectedAuthorities.length === 0) {
+      Alert.alert("Error", "Please select at least one authority");
       return;
     }
 
     setLoading(true);
-    
-    // Create the complaint data
+
+    // Create complaint data
     const complaintData = {
       title: title.trim(),
       description: description.trim(),
@@ -105,80 +132,152 @@ export default function ComplaintScreen({ route, navigation }) {
       address,
       authorities: selectedAuthorities,
     };
-    
-    // Save the complaint
+
+    // Save complaint locally
     addComplaint(complaintData);
-    
-    // Simulate submission delay
-    setTimeout(() => {
+
+    // Check if mail is available
+    const isAvailable = await MailComposer.isAvailableAsync();
+
+    if (!isAvailable) {
       setLoading(false);
       Alert.alert(
-        'Success',
-        'Your complaint has been submitted successfully!',
+        "Email Not Available",
+        "Your device does not have email configured. The complaint has been saved locally.",
         [
           {
-            text: 'OK',
-            onPress: () => {
-              navigation.navigate('MainTabs', { screen: 'Home' });
-            },
+            text: "OK",
+            onPress: () => navigation.navigate("MainTabs", { screen: "Home" }),
           },
         ]
       );
-    }, 1000);
-  };
+      return;
+    }
 
-  const toggleAuthority = (authority) => {
-    setSelectedAuthorities(prev => {
-      const exists = prev.find(a => a.id === authority.id);
-      if (exists) {
-        return prev.filter(a => a.id !== authority.id);
+    // Prepare email content
+    const recipientEmails = selectedAuthorities.map((auth) => auth.email);
+    const emailBody = `
+COMPLAINT DETAILS
+================
+
+Category: ${category}
+Title: ${title}
+
+Description:
+${description}
+
+Location:
+${address || "Location not available"}
+
+Coordinates:
+Latitude: ${location?.latitude || "N/A"}
+Longitude: ${location?.longitude || "N/A"}
+
+---
+Submitted via Complain King App
+    `.trim();
+
+    try {
+      // Open email composer
+      const result = await MailComposer.composeAsync({
+        recipients: recipientEmails,
+        subject: `Complaint: ${title}`,
+        body: emailBody,
+        attachments: photoUri ? [photoUri] : [],
+      });
+
+      setLoading(false);
+
+      if (result.status === "sent") {
+        Alert.alert(
+          "Success!",
+          "Your complaint email has been sent successfully.",
+          [
+            {
+              text: "OK",
+              onPress: () =>
+                navigation.navigate("MainTabs", { screen: "Home" }),
+            },
+          ]
+        );
+      } else if (result.status === "cancelled") {
+        Alert.alert(
+          "Email Cancelled",
+          "Your complaint has been saved locally, but the email was not sent.",
+          [
+            {
+              text: "OK",
+              onPress: () =>
+                navigation.navigate("MainTabs", { screen: "Home" }),
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Complaint Saved",
+          "Your complaint has been saved locally.",
+          [
+            {
+              text: "OK",
+              onPress: () =>
+                navigation.navigate("MainTabs", { screen: "Home" }),
+            },
+          ]
+        );
       }
-      return [...prev, authority];
-    });
+    } catch (error) {
+      setLoading(false);
+      console.error("Error composing email:", error);
+      Alert.alert(
+        "Error",
+        "Failed to open email composer, but your complaint has been saved locally.",
+        [
+          {
+            text: "OK",
+            onPress: () => navigation.navigate("MainTabs", { screen: "Home" }),
+          },
+        ]
+      );
+    }
   };
-
-  // Mock authorities - replace with actual data
-  const authorities = [
-    { id: 1, name: 'City Council', email: 'council@city.gov' },
-    { id: 2, name: 'Public Works', email: 'works@city.gov' },
-    { id: 3, name: 'Health Department', email: 'health@city.gov' },
-  ];
 
   return (
     <ScrollView style={styles.container}>
-      {photoUri && (
-        <Card style={styles.card}>
-          <Card.Content>
-            <Image source={{ uri: photoUri }} style={styles.image} />
-          </Card.Content>
-        </Card>
-      )}
-
       <Card style={styles.card}>
         <Card.Content>
-          <Title>Complaint Details</Title>
-          
+          <Title>Submit Complaint</Title>
+
+          {/* Photo Preview */}
+          {photoUri && (
+            <Image
+              source={{ uri: photoUri }}
+              style={styles.photo}
+              resizeMode="cover"
+            />
+          )}
+
+          {/* Title Input */}
           <TextInput
-            label="Title"
+            label="Complaint Title *"
             value={title}
             onChangeText={setTitle}
             mode="outlined"
             style={styles.input}
-            placeholder="e.g., Pothole on Main Street"
           />
 
+          {/* Description Input */}
           <TextInput
-            label="Description"
+            label="Description *"
             value={description}
             onChangeText={setDescription}
             mode="outlined"
             multiline
             numberOfLines={4}
             style={styles.input}
-            placeholder="Describe the issue in detail..."
           />
 
-          <Text style={styles.sectionTitle}>Category</Text>
+          {/* Category Selection */}
+          <Text style={styles.label}>Category *</Text>
           <View style={styles.chipContainer}>
             {CATEGORIES.map((cat) => (
               <Chip
@@ -191,42 +290,24 @@ export default function ComplaintScreen({ route, navigation }) {
               </Chip>
             ))}
           </View>
-        </Card.Content>
-      </Card>
 
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title>Location</Title>
-          {location && location.latitude && location.longitude ? (
-            <>
-              <Text style={styles.locationText}>
-                📍 Lat: {location.latitude.toFixed(6)}, Lng: {location.longitude.toFixed(6)}
-              </Text>
-              {address ? (
-                <Text style={styles.addressText}>{address}</Text>
-              ) : null}
-            </>
-          ) : (
-            <Text style={styles.locationText}>📍 Location not available</Text>
+          {/* Location Info */}
+          {address && (
+            <View style={styles.locationContainer}>
+              <Text style={styles.label}>Location</Text>
+              <Text style={styles.address}>{address}</Text>
+            </View>
           )}
-          <Button
-            mode="text"
-            onPress={getCurrentLocation}
-            style={styles.refreshButton}
-          >
-            Refresh Location
-          </Button>
-        </Card.Content>
-      </Card>
 
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title>Select Authorities</Title>
+          {/* Authority Selection */}
+          <Text style={styles.label}>Select Authorities *</Text>
           <View style={styles.chipContainer}>
-            {authorities.map((authority) => (
+            {AUTHORITIES.map((authority) => (
               <Chip
                 key={authority.id}
-                selected={!!selectedAuthorities.find(a => a.id === authority.id)}
+                selected={
+                  !!selectedAuthorities.find((a) => a.id === authority.id)
+                }
                 onPress={() => toggleAuthority(authority)}
                 style={styles.chip}
               >
@@ -234,20 +315,19 @@ export default function ComplaintScreen({ route, navigation }) {
               </Chip>
             ))}
           </View>
+
+          {/* Submit Button */}
+          <Button
+            mode="contained"
+            onPress={handleSubmit}
+            loading={loading}
+            disabled={loading}
+            style={styles.submitButton}
+          >
+            Submit Complaint
+          </Button>
         </Card.Content>
       </Card>
-
-      <View style={styles.buttonContainer}>
-        <Button
-          mode="contained"
-          onPress={handleSubmit}
-          loading={loading}
-          disabled={loading}
-          style={styles.submitButton}
-        >
-          Submit Complaint
-        </Button>
-      </View>
     </ScrollView>
   );
 }
@@ -255,52 +335,46 @@ export default function ComplaintScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#f5f5f5",
   },
   card: {
     margin: 16,
-    marginBottom: 8,
   },
-  image: {
-    width: '100%',
+  photo: {
+    width: "100%",
     height: 200,
     borderRadius: 8,
-  },
-  input: {
     marginBottom: 16,
   },
-  sectionTitle: {
+  input: {
+    marginBottom: 12,
+  },
+  label: {
     fontSize: 16,
-    fontWeight: 'bold',
-    marginTop: 8,
+    fontWeight: "bold",
+    marginTop: 12,
     marginBottom: 8,
   },
   chipContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 12,
   },
   chip: {
-    marginRight: 8,
-    marginBottom: 8,
+    margin: 4,
   },
-  locationText: {
+  locationContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 8,
+  },
+  address: {
     fontSize: 14,
-    marginTop: 8,
-  },
-  addressText: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  refreshButton: {
-    marginTop: 8,
-  },
-  buttonContainer: {
-    margin: 16,
-    marginTop: 8,
+    color: "#666",
   },
   submitButton: {
-    paddingVertical: 6,
+    marginTop: 24,
+    paddingVertical: 8,
   },
 });
