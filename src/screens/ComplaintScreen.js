@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ScrollView, Image, Alert } from "react-native";
-import { TextInput, Button, Card, Title, Chip, Text } from "react-native-paper";
 import * as Location from "expo-location";
 import * as MailComposer from "expo-mail-composer";
+import React, { useEffect, useState } from "react";
+import { Alert, Image, ScrollView, StyleSheet, View } from "react-native";
+import { Button, Card, Chip, Text, TextInput, Title } from "react-native-paper";
 import { useComplaints } from "../context/ComplaintsContext";
 
 const CATEGORIES = [
@@ -30,10 +30,14 @@ export default function ComplaintScreen({ route, navigation }) {
 
   // Mock authorities - replace with actual data from AsyncStorage or props
   const AUTHORITIES = [
-    { id: "1", name: "City Council", email: "chechiatming@icloud.com" },
-    { id: "2", name: "Police Department", email: "chechiatming@icloud.com" },
-    { id: "3", name: "Public Works", email: "chechiatming@icloud.com" },
-    { id: "4", name: "Environmental Agency", email: "chechiatming@icloud.com" },
+    { id: "1", name: "Town Council", email: "chechiatming@icloud.com" },
+    {
+      id: "2",
+      name: "Singapore Police Force",
+      email: "chechiatming@icloud.com",
+    },
+    { id: "3", name: "LTA", email: "chechiatming@icloud.com" },
+    { id: "4", name: "NEA", email: "chechiatming@icloud.com" },
   ];
 
   useEffect(() => {
@@ -52,42 +56,100 @@ export default function ComplaintScreen({ route, navigation }) {
         return;
       }
 
-      let loc = await Location.getCurrentPositionAsync({});
+      let loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
       if (loc) {
         const locationData = {
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
+          accuracy: loc.coords.accuracy,
         };
         setLocation(locationData);
         getAddressFromCoords(locationData.latitude, locationData.longitude);
       }
     } catch (error) {
       console.error("Error getting location:", error);
+      Alert.alert("Error", "Failed to get current location");
     }
   };
 
   const getAddressFromCoords = async (latitude, longitude) => {
     try {
+      console.log("Getting address for coordinates:", latitude, longitude);
+
       const addresses = await Location.reverseGeocodeAsync({
         latitude,
         longitude,
       });
 
+      console.log(
+        "Reverse geocode result:",
+        JSON.stringify(addresses, null, 2)
+      );
+
       if (addresses && addresses.length > 0) {
         const addr = addresses[0];
-        const formattedAddress = [
-          addr.street,
-          addr.city,
-          addr.region,
-          addr.postalCode,
-          addr.country,
-        ]
+
+        // Build address with all available fields
+        // Singapore addresses typically have: name, street, district, city, region, postalCode, country
+        const addressParts = [];
+
+        // Try different field combinations for better Singapore address formatting
+        if (addr.name && addr.name !== addr.street) {
+          addressParts.push(addr.name);
+        }
+        if (addr.streetNumber) {
+          addressParts.push(addr.streetNumber);
+        }
+        if (addr.street) {
+          addressParts.push(addr.street);
+        }
+        if (addr.district) {
+          addressParts.push(addr.district);
+        }
+        if (addr.subregion) {
+          addressParts.push(addr.subregion);
+        }
+        if (addr.city) {
+          addressParts.push(addr.city);
+        }
+        if (addr.region && addr.region !== addr.city) {
+          addressParts.push(addr.region);
+        }
+        if (addr.postalCode) {
+          addressParts.push(addr.postalCode);
+        }
+        if (addr.country) {
+          addressParts.push(addr.country);
+        }
+
+        const formattedAddress = addressParts
           .filter(Boolean)
+          .filter((value, index, self) => self.indexOf(value) === index) // Remove duplicates
           .join(", ");
-        setAddress(formattedAddress);
+
+        console.log("Formatted address:", formattedAddress);
+
+        if (formattedAddress && formattedAddress !== addr.country) {
+          setAddress(formattedAddress);
+        } else {
+          // Fallback to coordinates if no detailed address
+          setAddress(
+            `Lat: ${latitude.toFixed(6)}, Long: ${longitude.toFixed(6)}`
+          );
+        }
+      } else {
+        console.log("No addresses found");
+        setAddress(
+          `Lat: ${latitude.toFixed(6)}, Long: ${longitude.toFixed(6)}`
+        );
       }
     } catch (error) {
       console.error("Error getting address:", error);
+      // Fallback to showing coordinates
+      setAddress(`Lat: ${latitude.toFixed(6)}, Long: ${longitude.toFixed(6)}`);
     }
   };
 
@@ -296,6 +358,11 @@ Submitted via Complain King App
             <View style={styles.locationContainer}>
               <Text style={styles.label}>Location</Text>
               <Text style={styles.address}>{address}</Text>
+              {location && location.accuracy && (
+                <Text style={styles.accuracy}>
+                  Accuracy: ±{Math.round(location.accuracy)}m
+                </Text>
+              )}
             </View>
           )}
 
@@ -372,6 +439,11 @@ const styles = StyleSheet.create({
   address: {
     fontSize: 14,
     color: "#666",
+  },
+  accuracy: {
+    fontSize: 12,
+    color: "#999",
+    marginTop: 4,
   },
   submitButton: {
     marginTop: 24,
